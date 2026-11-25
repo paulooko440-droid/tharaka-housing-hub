@@ -29,7 +29,7 @@
 <script>
 (()=>{
 const URL="https://jpjicujelmrwzkuegzij.supabase.co",KEY="sb_publishable_D0kXIdL-fMiwvSdhSDnguQ_PlePgGeI";
-const db=URL.startsWith("https://")&&KEY.startsWith("sb_publishable_")?window.supabase.createClient(URL,KEY):null;
+const db=(URL.startsWith("https://")&&KEY.startsWith("sb_publishable_")&&window.supabase&&typeof window.supabase.createClient==="function")?window.supabase.createClient(URL,KEY):null;
 const $=id=>document.getElementById(id);let user=null,isAdmin=false,userRole="student",rooms=[],showPending=false,authMode="login",profileData=null;
 const demo=[{id:"demo1",name:"Sample accommodation preview",location:"Marimanti (example only)",type:"Single room",price:4500,features:["Demo listing","Not available for booking"],phone:"",description:"This is sample content for layout preview, not a verified or available room.",status:"approved"}];
 function toast(s){$("toast").textContent=s;$("toast").classList.add("show");setTimeout(()=>$("toast").classList.remove("show"),3500)}
