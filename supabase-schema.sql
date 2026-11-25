@@ -7,6 +7,23 @@ create index if not exists listings_status_created_idx on public.listings(status
 alter table public.listings add column if not exists whatsapp_phone text;
 update public.listings set whatsapp_phone=phone where whatsapp_phone is null;
 alter table public.listings alter column whatsapp_phone set not null;
+
+-- Student profile photo and WhatsApp contact fields.
+alter table public.profiles add column if not exists avatar_url text;
+alter table public.profiles add column if not exists whatsapp_phone text;
+grant select, update on public.profiles to authenticated;
+drop policy if exists "Users update own profile" on public.profiles;
+create policy "Users update own profile" on public.profiles for update to authenticated using(id=auth.uid()) with check(id=auth.uid());
+insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
+values('profile-photos','profile-photos',true,5242880,array['image/jpeg','image/png','image/webp'])
+on conflict(id) do update set public=true,file_size_limit=5242880;
+drop policy if exists "Profile photos are publicly viewable" on storage.objects;
+create policy "Profile photos are publicly viewable" on storage.objects for select to anon,authenticated using(bucket_id='profile-photos');
+drop policy if exists "Users upload own profile photos" on storage.objects;
+create policy "Users upload own profile photos" on storage.objects for insert to authenticated with check(bucket_id='profile-photos' and (storage.foldername(name))[1]=auth.uid()::text);
+drop policy if exists "Users update own profile photos" on storage.objects;
+create policy "Users update own profile photos" on storage.objects for update to authenticated using(bucket_id='profile-photos' and (storage.foldername(name))[1]=auth.uid()::text) with check(bucket_id='profile-photos' and (storage.foldername(name))[1]=auth.uid()::text);
+
 create or replace function public.handle_new_user() returns trigger language plpgsql security definer set search_path=public as $ declare requested_role text; begin requested_role:=case when new.raw_user_meta_data->>'role' in ('student','landlord') then new.raw_user_meta_data->>'role' else 'student' end; insert into public.profiles(id,full_name,role) values(new.id,coalesce(new.raw_user_meta_data->>'full_name',''),requested_role);return new;end;$;
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users for each row execute procedure public.handle_new_user();
