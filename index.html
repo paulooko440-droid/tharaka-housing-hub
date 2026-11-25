@@ -25,8 +25,8 @@
 <div class="toast" id="toast"></div>
 <script>
 (()=>{
-const URL="YOUR_SUPABASE_URL",KEY="YOUR_SUPABASE_ANON_KEY";
-const db=URL.startsWith("https://")&&KEY!=="YOUR_SUPABASE_ANON_KEY"?window.supabase.createClient(URL,KEY):null;
+const URL="sb_publishable_D0kXIdL-fMiwvSdhSDnguQ_PlePgGeI",KEY="sb_publishable_D0kXIdL-fMiwvSdhSDnguQ_PlePgGeI";
+const db=URL.startsWith("https://")&&KEY!=="sb_publishable_D0kXIdL-fMiwvSdhSDnguQ_PlePgGeI"?window.supabase.createClient(URL,KEY):null;
 const $=id=>document.getElementById(id);let user=null,isAdmin=false,rooms=[],showPending=false,authMode="login";
 const demo=[{id:"demo1",name:"Sample accommodation preview",location:"Marimanti (example only)",type:"Single room",price:4500,features:["Demo listing","Not available for booking"],phone:"",description:"This is sample content for layout preview, not a verified or available room.",status:"approved"}];
 function toast(s){$("toast").textContent=s;$("toast").classList.add("show");setTimeout(()=>$("toast").classList.remove("show"),3500)}
