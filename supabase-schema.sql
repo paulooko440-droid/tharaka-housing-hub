@@ -3,6 +3,10 @@ create extension if not exists pgcrypto;
 create table if not exists public.profiles(id uuid primary key references auth.users(id) on delete cascade,full_name text,role text not null default 'student' check(role in ('student','landlord','admin')),created_at timestamptz not null default now());
 create table if not exists public.listings(id uuid primary key default gen_random_uuid(),owner_id uuid not null references auth.users(id) on delete cascade,name text not null check(char_length(name) between 2 and 90),location text not null check(char_length(location) between 2 and 100),type text not null check(type in ('Single room','Shared room','Hostel','Self-contained','Bedsitter')),price integer not null check(price>0 and price<=1000000),phone text not null,features text[] not null default '{}',description text not null default '',photos text[] not null default '{}',status text not null default 'pending' check(status in ('pending','approved','rejected')),created_at timestamptz not null default now(),updated_at timestamptz not null default now());
 create index if not exists listings_status_created_idx on public.listings(status,created_at desc);
+-- Exact map coordinates selected by the landlord when submitting a room.
+alter table public.listings add column if not exists latitude double precision;
+alter table public.listings add column if not exists longitude double precision;
+
 -- Store a dedicated WhatsApp contact for each landlord listing. Existing listings reuse their phone number.
 alter table public.listings add column if not exists whatsapp_phone text;
 update public.listings set whatsapp_phone=phone where whatsapp_phone is null;
