@@ -3,7 +3,7 @@ create extension if not exists pgcrypto;
 create table if not exists public.profiles(id uuid primary key references auth.users(id) on delete cascade,full_name text,role text not null default 'student' check(role in ('student','landlord','admin')),created_at timestamptz not null default now());
 create table if not exists public.listings(id uuid primary key default gen_random_uuid(),owner_id uuid not null references auth.users(id) on delete cascade,name text not null check(char_length(name) between 2 and 90),location text not null check(char_length(location) between 2 and 100),type text not null check(type in ('Single room','Shared room','Hostel','Self-contained','Bedsitter')),price integer not null check(price>0 and price<=1000000),phone text not null,features text[] not null default '{}',description text not null default '',photos text[] not null default '{}',status text not null default 'pending' check(status in ('pending','approved','rejected')),created_at timestamptz not null default now(),updated_at timestamptz not null default now());
 create index if not exists listings_status_created_idx on public.listings(status,created_at desc);
-create or replace function public.handle_new_user() returns trigger language plpgsql security definer set search_path=public as $$ begin insert into public.profiles(id,full_name) values(new.id,coalesce(new.raw_user_meta_data->>'full_name',''));return new;end;$$;
+create or replace function public.handle_new_user() returns trigger language plpgsql security definer set search_path=public as $ declare requested_role text; begin requested_role:=case when new.raw_user_meta_data->>'role' in ('student','landlord') then new.raw_user_meta_data->>'role' else 'student' end; insert into public.profiles(id,full_name,role) values(new.id,coalesce(new.raw_user_meta_data->>'full_name',''),requested_role);return new;end;$;
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users for each row execute procedure public.handle_new_user();
 create or replace function public.is_admin() returns boolean language sql stable security definer set search_path=public as $$ select exists(select 1 from public.profiles where id=auth.uid() and role='admin');$$;
@@ -13,7 +13,7 @@ create policy "Profiles readable by owner or admin" on public.profiles for selec
 drop policy if exists "Approved listings public" on public.listings;
 create policy "Approved listings public" on public.listings for select to anon,authenticated using(status='approved' or owner_id=auth.uid() or public.is_admin());
 drop policy if exists "Authenticated users create own pending listings" on public.listings;
-create policy "Authenticated users create own pending listings" on public.listings for insert to authenticated with check(owner_id=auth.uid() and status='pending');
+create policy "Authenticated landlords create own pending listings" on public.listings for insert to authenticated with check(owner_id=auth.uid() and status='pending' and exists(select 1 from public.profiles where id=auth.uid() and role='landlord'));
 drop policy if exists "Owners update own pending or rejected listings" on public.listings;
 create policy "Owners update own pending or rejected listings" on public.listings for update to authenticated using(owner_id=auth.uid() and status in ('pending','rejected')) with check(owner_id=auth.uid() and status in ('pending','rejected'));
 drop policy if exists "Admins update any listing" on public.listings;
