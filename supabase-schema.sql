@@ -11,6 +11,11 @@ alter table public.listings alter column whatsapp_phone set not null;
 -- Student profile photo and WhatsApp contact fields.
 alter table public.profiles add column if not exists avatar_url text;
 alter table public.profiles add column if not exists whatsapp_phone text;
+alter table public.profiles add column if not exists landlord_approved boolean not null default false;
+update public.profiles set landlord_approved=false where role='landlord' and landlord_approved is null;
+grant select, update on public.profiles to authenticated;
+drop policy if exists "Admins update landlord approval" on public.profiles;
+create policy "Admins update landlord approval" on public.profiles for update to authenticated using(public.is_admin()) with check(public.is_admin());
 grant select, update on public.profiles to authenticated;
 drop policy if exists "Users update own profile" on public.profiles;
 create policy "Users update own profile" on public.profiles for update to authenticated using(id=auth.uid()) with check(id=auth.uid());
