@@ -39,7 +39,8 @@ create policy "Profiles readable by owner or admin" on public.profiles for selec
 drop policy if exists "Approved listings public" on public.listings;
 create policy "Approved listings public" on public.listings for select to anon,authenticated using(status='approved' or owner_id=auth.uid() or public.is_admin());
 drop policy if exists "Authenticated users create own pending listings" on public.listings;
-create policy "Authenticated landlords create own pending listings" on public.listings for insert to authenticated with check(owner_id=auth.uid() and status='pending' and exists(select 1 from public.profiles where id=auth.uid() and role='landlord'));
+drop policy if exists "Authenticated landlords create own pending listings" on public.listings;
+create policy "Authenticated users create own pending listings" on public.listings for insert to authenticated with check(owner_id=auth.uid() and status='pending');
 drop policy if exists "Owners update own pending or rejected listings" on public.listings;
 create policy "Owners update own pending or rejected listings" on public.listings for update to authenticated using(owner_id=auth.uid() and status in ('pending','rejected')) with check(owner_id=auth.uid() and status in ('pending','rejected'));
 drop policy if exists "Admins update any listing" on public.listings;
