@@ -27,10 +27,10 @@ create policy "Users upload own profile photos" on storage.objects for insert to
 drop policy if exists "Users update own profile photos" on storage.objects;
 create policy "Users update own profile photos" on storage.objects for update to authenticated using(bucket_id='profile-photos' and (storage.foldername(name))[1]=auth.uid()::text) with check(bucket_id='profile-photos' and (storage.foldername(name))[1]=auth.uid()::text);
 
-create or replace function public.handle_new_user() returns trigger language plpgsql security definer set search_path=public as $ declare requested_role text; begin requested_role:=case when new.raw_user_meta_data->>'role' in ('student','landlord') then new.raw_user_meta_data->>'role' else 'student' end; insert into public.profiles(id,full_name,role) values(new.id,coalesce(new.raw_user_meta_data->>'full_name',''),requested_role);return new;end;$;
+create or replace function public.handle_new_user() returns trigger language plpgsql security definer set search_path=public as $ declare requested_role text; begin requested_role:=case when new.raw_user_meta_data->>'role' in ('student','landlord') then new.raw_user_meta_data->>'role' else 'student' end; insert into public.profiles(id,full_name,role) values(new.id,coalesce(new.raw_user_meta_data->>'full_name',''),requested_role);return new;end; $;
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users for each row execute procedure public.handle_new_user();
-create or replace function public.is_admin() returns boolean language sql stable security definer set search_path=public as $ select exists(select 1 from public.profiles where id=auth.uid() and role='admin');$;
+create or replace function public.is_admin() returns boolean language sql stable security definer set search_path=public as $ select exists(select 1 from public.profiles where id=auth.uid() and role='admin'); $;
 drop policy if exists "Admins update landlord approval" on public.profiles;
 create policy "Admins update landlord approval" on public.profiles for update to authenticated using(public.is_admin()) with check(public.is_admin());
 alter table public.profiles enable row level security;alter table public.listings enable row level security;
