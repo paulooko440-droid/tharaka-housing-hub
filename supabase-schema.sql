@@ -101,3 +101,111 @@ drop policy if exists "Users delete own photos" on storage.objects;
 create policy "Users delete own photos" on storage.objects for delete to authenticated using(bucket_id='listing-photos' and ((storage.foldername(name))[1]=auth.uid()::text or public.is_admin()));
 -- After creating your own account, promote it from SQL Editor:
 -- update public.profiles set role='admin' where id=(select id from auth.users where email='YOUR_ADMIN_EMAIL');
+
+
+-- Verified landlord badges and student landlord reviews.
+-- Run this section in Supabase SQL Editor after the existing schema is installed.
+
+create table if not exists public.landlord_reviews (
+  id uuid primary key default gen_random_uuid(),
+  landlord_id uuid not null references public.profiles(id) on delete cascade,
+  student_id uuid not null references public.profiles(id) on delete cascade,
+  student_name text not null default 'Student',
+  rating integer not null check (rating between 1 and 5),
+  review_text text not null check (char_length(review_text) between 10 and 1000),
+  created_at timestamptz not null default now(),
+  constraint one_review_per_student_per_landlord unique (landlord_id, student_id),
+  constraint landlord_cannot_review_self check (landlord_id <> student_id)
+);
+
+create index if not exists landlord_reviews_landlord_created_idx
+  on public.landlord_reviews (landlord_id, created_at desc);
+
+alter table public.landlord_reviews enable row level security;
+
+drop policy if exists "Public can read landlord reviews" on public.landlord_reviews;
+create policy "Public can read landlord reviews"
+  on public.landlord_reviews for select
+  to anon, authenticated
+  using (true);
+
+grant select on public.landlord_reviews to anon, authenticated;
+revoke insert, update, delete on public.landlord_reviews from anon, authenticated;
+
+-- Only expose IDs of approved landlords; do not make private profile details public.
+create or replace function public.get_verified_landlord_ids()
+returns table (landlord_id uuid)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select p.id
+  from public.profiles p
+  where p.role = 'landlord'
+    and p.landlord_approved = true;
+$$;
+
+grant execute on function public.get_verified_landlord_ids() to anon, authenticated;
+
+-- Students submit reviews through this function. The database checks their role,
+-- verifies the landlord, prevents self-reviews, and allows one review per landlord.
+create or replace function public.submit_landlord_review(
+  p_landlord_id uuid,
+  p_rating integer,
+  p_review_text text
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  student_display_name text;
+begin
+  if auth.uid() is null then
+    raise exception 'Please sign in as a student before submitting a review.';
+  end if;
+
+  if p_rating is null or p_rating < 1 or p_rating > 5 then
+    raise exception 'Choose a rating from 1 to 5 stars.';
+  end if;
+
+  if p_review_text is null or char_length(trim(p_review_text)) < 10
+     or char_length(trim(p_review_text)) > 1000 then
+    raise exception 'Your review must be between 10 and 1000 characters.';
+  end if;
+
+  if not exists (
+    select 1 from public.profiles
+    where id = auth.uid() and role = 'student'
+  ) then
+    raise exception 'Only student accounts can submit landlord reviews.';
+  end if;
+
+  if not exists (
+    select 1 from public.profiles
+    where id = p_landlord_id
+      and role = 'landlord'
+      and landlord_approved = true
+  ) then
+    raise exception 'You can only review an approved landlord.';
+  end if;
+
+  select coalesce(nullif(trim(full_name), ''), 'Student')
+    into student_display_name
+  from public.profiles
+  where id = auth.uid();
+
+  insert into public.landlord_reviews
+    (landlord_id, student_id, student_name, rating, review_text)
+  values
+    (p_landlord_id, auth.uid(), student_display_name, p_rating, trim(p_review_text));
+exception
+  when unique_violation then
+    raise exception 'You have already reviewed this landlord. Only one review per landlord is allowed.';
+end;
+$$;
+
+grant execute on function public.submit_landlord_review(uuid, integer, text)
+  to authenticated;
